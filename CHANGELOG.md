@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Return HTTP 400 for malformed request objects and array entries without starting a model turn.
+- Keep developer messages after an initial assistant turn in conversation order.
+- Shorten installation instructions and clarify the tested Responses API subset.
+
 ## 0.1.0
 
 First release.

@@ -270,7 +270,8 @@ test("--help, --version, unknown options", TIMEOUT, () => withSandbox({}, async 
     const result = await run([flag], { ...noHome, PATH: "/nonexistent" });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stderr, "");
-    assert.match(result.stdout, flag === "--help" ? /^usage: codex-on-claude-code exec/ : /^0\.1\.0\n$/);
+    if (flag === "--help") assert.match(result.stdout, /^usage: codex-on-claude-code exec/);
+    else assert.equal(result.stdout, `${JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version}\n`);
   }
   for (const args of [["--bogus"], ["exec", "--bogus", "--", "codex"], [], ["exec", "--model"], ["exec", "codex"]]) {
     const result = await run(args, box.env);

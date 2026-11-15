@@ -12,7 +12,7 @@ Use your Claude Code login from the stock Codex CLI. Codex keeps its prompts, to
 ## Install
 
 ```sh
-npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.0/codex-on-claude-code-0.1.0.tgz
+npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.1/codex-on-claude-code-0.1.1.tgz
 ```
 
 There are no npm dependencies.

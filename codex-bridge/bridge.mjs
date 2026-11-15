@@ -29,7 +29,7 @@ import { createClaudeCodeAdapter } from "../claude-code/adapter.js";
 import { resolveClaudeExecutable, processEnvironment } from "../claude-code/claude-cli.js";
 import { loadHarness } from "../claude-code/harness.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.1.1";
 export const MARKER = "# codex-on-claude-code managed config";
 export const TOKEN_ENV = "CODEX_BRIDGE_TOKEN";
 const PROVIDER = "claude-code-bridge";
