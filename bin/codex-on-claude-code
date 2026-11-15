@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+import { main } from "../codex-bridge/bridge.mjs";
+
+main(process.argv.slice(2)).then(
+  (code) => process.exit(code),
+  (error) => { process.stderr.write(`codex-on-claude-code: ${error?.message ?? error}\n`); process.exit(1); },
+);

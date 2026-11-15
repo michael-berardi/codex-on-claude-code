@@ -1,0 +1,42 @@
+{
+  "name": "codex-on-claude-code",
+  "version": "0.1.0",
+  "description": "Run the Codex CLI on your Claude Code login through a loopback Responses endpoint.",
+  "type": "module",
+  "bin": {
+    "codex-on-claude-code": "bin/codex-on-claude-code"
+  },
+  "files": [
+    "bin/",
+    "codex-bridge/",
+    "claude-code/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=300000 \"test/*.test.js\""
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michael-berardi/codex-on-claude-code.git"
+  },
+  "homepage": "https://github.com/michael-berardi/codex-on-claude-code#readme",
+  "bugs": {
+    "url": "https://github.com/michael-berardi/codex-on-claude-code/issues"
+  },
+  "keywords": [
+    "codex",
+    "codex-cli",
+    "claude-code",
+    "responses-api",
+    "bridge",
+    "coding-agent"
+  ],
+  "author": "Pareto Cybernetics (https://paretocybernetics.com)"
+}
