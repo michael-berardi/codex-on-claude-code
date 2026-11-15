@@ -112,7 +112,7 @@ export function translateRequest(body) {
     } else if (type === "message" && (item.role === "developer" || item.role === "system")) {
       const text = textOf(item.content);
       if (text.trim()) {
-        if (messages.length === 0) systemParts.push(text);
+        if (messages.length === 0 && !assistant) systemParts.push(text);
         else { closeAssistant(); messages.push({ role: "user", id: `u${n++}`, content: [{ type: "text", text }], source: { kind: "user" } }); }
       }
     } else if (type === "message" && item.role === "user") {
@@ -209,6 +209,13 @@ export async function startBridge({ adapter, token, log = () => {} }) {
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch {
         res.writeHead(400, { "content-type": "application/json" }).end(JSON.stringify({ error: { message: "bad JSON" } })); return;
+      }
+      const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+      if (!isObject(body) || [body.input, body.tools].some((items) => Array.isArray(items) && !items.every(isObject))) {
+        res.writeHead(400, { "content-type": "application/json" }).end(JSON.stringify({
+          error: { message: "expected a request object with object entries in input and tools" },
+        }));
+        return;
       }
       const id = `resp_${randomUUID()}`;
       const { system, messages, tools, skipped } = translateRequest(body);

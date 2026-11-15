@@ -293,3 +293,20 @@ test("checkCodexHome and writeCodexConfig each refuse a foreign config", TIMEOUT
   assert.throws(() => checkCodexHome({ ...box.env, CODEX_HOME: join(box.home, ".codex") }), { code: "CODEX_BRIDGE_HOME_IS_DEFAULT" });
   assert.throws(() => checkCodexHome({ HOME: box.home }), { code: "CODEX_BRIDGE_HOME_UNSET" });
 }));
+
+// Invalid JSON shapes must be client errors and must never start a model turn.
+test("malformed request objects return 400 without calling the adapter", async () => {
+  let calls = 0;
+  const token = "a".repeat(64);
+  const bridge = await startBridge({ token, adapter: { async *stream() { calls++; } } });
+  try {
+    for (const body of [null, [], 42, "text", { input: [null] }, { tools: [null] }, { input: [42] }, { tools: ["function"] }]) {
+      const response = await fetch(`${bridge.url}/responses`, {
+        method: "POST", headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+      });
+      assert.equal(response.status, 400, JSON.stringify(body));
+      assert.equal((await response.json()).error.message, "expected a request object with object entries in input and tools");
+    }
+    assert.equal(calls, 0);
+  } finally { await bridge.close(); }
+});

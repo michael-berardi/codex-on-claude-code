@@ -1,6 +1,6 @@
 # codex-on-claude-code
 
-codex-on-claude-code lets the stock Codex CLI generate through your Claude Code login. Codex keeps its prompts, tools, sandbox and conversation; a small loopback server translates each Codex request into one `claude` CLI turn.
+Use your Claude Code login from the stock Codex CLI. Codex keeps its prompts, tools, sandbox and conversation; a loopback server translates each request into one `claude` CLI turn. For Codex users who want Claude to generate while Codex runs tools.
 
 ## Requirements
 
@@ -11,19 +11,11 @@ codex-on-claude-code lets the stock Codex CLI generate through your Claude Code 
 
 ## Install
 
-From a release tarball:
-
 ```sh
 npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.0/codex-on-claude-code-0.1.0.tgz
 ```
 
-From the repository tag:
-
-```sh
-npm i -g github:michael-berardi/codex-on-claude-code#v0.1.0
-```
-
-There are no dependencies.
+There are no npm dependencies.
 
 ## Use
 
@@ -45,7 +37,7 @@ Exit codes: the wrapped command's code; 128 plus the signal number if it died fr
 
 Works (the test suite checks this against stand-ins for both CLIs):
 
-- `codex exec` and interactive `codex`.
+- Requests from stand-ins for `codex exec` and interactive `codex`; real CLI compatibility is not tested by this suite.
 - Codex function tools: Claude asks for a tool, Codex runs it in its own sandbox, and the result goes back to Claude.
 - Multi-turn conversations. Each response carries Claude's native message, including signed thinking, so later turns replay it exactly.
 - Token usage, including cache reads and cache writes.
@@ -56,12 +48,12 @@ Does not work:
 - Image and file input. Only text parts of a message are sent; images and files are dropped.
 - Live streaming. Each response reaches Codex in one piece when the Claude turn ends.
 - Claude Code's own tools. They are switched off; only Codex runs tools.
-- This is not a general Responses API server. It implements what Codex needs.
+- Only the Codex Responses subset is supported: array input, function tools and buffered SSE responses. Other Responses API clients may not work.
 
 ## Security model
 
 - The server listens on 127.0.0.1 only, on a random port.
-- Each run creates a new random token of 32 bytes. Every request must send it as a bearer token. A missing or wrong token gets 401 before any work starts. The comparison takes constant time.
+- Each run creates a new random token of 32 bytes. Every request must send it as a bearer token. A missing or wrong token gets 401 before any model work starts. The comparison takes constant time.
 - The token reaches Codex only through the environment variable `CODEX_BRIDGE_TOKEN`. The config names that variable (`env_key`); it never contains the token. The token is never put on a command line and never logged. The config also tells Codex not to pass it to the commands it runs.
 - Any process that can read the wrapped command's environment can use the server while the run lasts.
 - `CODEX_HOME` must be a private folder. The bridge refuses to run when `CODEX_HOME` is unset, when it is your real `~/.codex` (also through a symlink), or when it holds a `config.toml` the bridge did not write. A bridge-written config starts with the line `# codex-on-claude-code managed config`. A new config is created with exclusive create; a bridge-written one is replaced by renaming a temp file over it. The folder is set to mode 0700 and the file to 0600.
@@ -87,11 +79,9 @@ You are responsible for following the terms of the services you connect.
 - `CODEX_BRIDGE_ALLOW_USAGE_CREDITS`: set to `1` to let turns charged to usage credits succeed. Off by default.
 - `CODEX_BRIDGE_TOKEN`: set by the bridge for the wrapped command only. Any value you set is replaced.
 
-## Licences
+## Licence
 
-- `LICENSE` holds two MIT notices. The first, Copyright (c) 2026 Pareto Cybernetics, covers this project. The second, Copyright (c) 2026 Armin Ronacher, covers the `claude-code/` folder.
-- `claude-code/LICENSE` holds the Armin Ronacher notice for the files in `claude-code/`, which are adapted from code under that notice.
-- All other files (`bin/`, `codex-bridge/`, `test/`, `scripts/` and the documents) carry the Pareto Cybernetics notice.
+MIT; see [LICENSE](LICENSE) and [claude-code/LICENSE](claude-code/LICENSE) for the project and adapted-code notices.
 
 ## Development
 

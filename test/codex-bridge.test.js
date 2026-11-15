@@ -62,3 +62,10 @@ test("the generated Codex config points at the loopback endpoint and carries no 
   assert.match(text, /^env_key = "CODEX_BRIDGE_TOKEN"$/m);
   assert.match(text, /^\[shell_environment_policy\]\nexclude = \["CODEX_BRIDGE_TOKEN"\]$/m);
 });
+
+// A buffered assistant turn must not turn a later developer message into a leading instruction.
+test("developer messages after an initial assistant turn stay in conversation order", () => {
+  const out = translateRequest({ input: [msg("assistant", "earlier"), msg("developer", "later")] });
+  assert.equal(out.system, "");
+  assert.deepEqual(out.messages.map((m) => [m.role, m.content[0].text]), [["assistant", "earlier"], ["user", "later"]]);
+});
