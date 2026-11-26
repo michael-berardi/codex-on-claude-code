@@ -63,11 +63,10 @@ Does not work:
 
 ## Privacy
 
-During a run, the bridge listens only on `127.0.0.1` with a random bearer token. Codex sends prompts and tool results to that loopback address; the bridge runs one `claude` turn per request and forwards it to your configured Claude provider (normally Anthropic through your Claude Code login). At startup it also runs `claude auth status` and a model-catalog probe; the probe asks which models your login can use and sends no prompt. Installing downloads the release tarball from GitHub over HTTPS; this repository does not verify a checksum or signature for that download. Codex follows its own configuration; the bridge points its model provider at loopback.
-
-There is no telemetry or analytics code in this project and no npm dependencies. Codex and Claude are launched with `DO_NOT_TRACK=1`, `DISABLE_TELEMETRY=1` and `DISABLE_ERROR_REPORTING=1`. Claude Code also gets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, including for the startup model-catalog probe, so the probe lists the CLI's built-in models; a model id that list does not name is still passed to the CLI.
-
-The bridge writes `$CODEX_HOME/config.toml` (directory `0700`, file `0600`) with the loopback URL, model and the token's environment-variable name; it never writes the token, credentials or prompts there. Per-turn temporary files holding the system prompt and tool schemas are created `0700`/`0600` and removed when the run ends. The bridge keeps no logs, history or cache on disk; the Codex and Claude CLIs manage their own credentials and transcripts separately. To delete what this bridge wrote, remove the `CODEX_HOME` folder you supplied.
+- Codex uses a loopback-only port with a fresh random token; each request runs one `claude` turn on your login.
+- Startup checks `claude auth status` and the built-in model catalog; the probe sends no prompt.
+- Telemetry is off for both CLIs; the bridge writes no logs, history or cache.
+- The bridge writes only `$CODEX_HOME/config.toml` and private per-turn temp files; see [PRIVACY.md](PRIVACY.md) for lifetimes and deletion.
 
 ## Billing
 

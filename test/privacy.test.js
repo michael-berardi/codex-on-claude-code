@@ -1,7 +1,7 @@
 // Privacy regression: no analytics/telemetry SDK or endpoint may enter shipped source, and the generated
 // Codex config must stay on loopback. The telemetry-off environment is asserted in bridge.test.js through
 // the fake Codex CLI, so the check covers the actual launch path.
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -9,8 +9,20 @@ import assert from "node:assert/strict";
 import { configToml, startBridge } from "../codex-bridge/bridge.mjs";
 import { TELEMETRY_OFF_ENV, withTelemetryOff } from "../claude-code/env.js";
 import { discoveryEnvironment } from "../claude-code/claude-cli.js";
+import { run, sandbox, start, waitFor } from "./helpers.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const EXEC = ["exec", "--model", "default", "--"];
+const TEMP_PREFIX = "codex-bridge-claude-code-";
+
+/** The private folder a launched fake `claude` was given for system.md, tools.json and settings.json. */
+function perTurnRoot(events) {
+  const launch = events.find((event) => event.event === "launch");
+  assert.ok(launch, "Claude Code was launched");
+  const systemPath = launch.argv[launch.argv.indexOf("--system-prompt-file") + 1];
+  assert.ok(systemPath, "the CLI was given a system prompt file");
+  return dirname(systemPath);
+}
 const sourceFiles = [
   "bin/codex-on-claude-code",
   "package.json",
@@ -59,5 +71,55 @@ test("the model-catalog probe keeps every telemetry switch on, like each request
   const env = discoveryEnvironment({ DO_NOT_TRACK: "0", DISABLE_TELEMETRY: "0" });
   for (const key of ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DISABLE_ERROR_REPORTING", "DO_NOT_TRACK"]) {
     assert.equal(env[key], "1", key);
+  }
+});
+
+// Protects PRIVACY.md's local-write table: every per-turn file and the atomic config temp file must be gone when
+// a run ends, including when the config is replaced on a later run with the same CODEX_HOME.
+test("per-turn files and the config temp file are removed after successful runs", { timeout: 120_000 }, async () => {
+  const box = sandbox();
+  try {
+    const tmp = join(box.dir, "tmp");
+    mkdirSync(tmp, { mode: 0o700 });
+    const env = { ...box.env, TMPDIR: tmp };
+    const first = await run([...EXEC, "codex"], env);
+    assert.equal(first.status, 0, first.stderr);
+    const privateRoot = perTurnRoot(box.claudeEvents());
+    assert.ok(privateRoot.startsWith(join(tmp, TEMP_PREFIX)), "the CLI used the private temp folder");
+    assert.equal(existsSync(privateRoot), false, "per-turn folder removed at process exit");
+    assert.deepEqual(readdirSync(tmp), [], "no per-turn folder remains in TMPDIR");
+    assert.deepEqual(readdirSync(box.env.CODEX_HOME), ["config.toml"], "no config temp file remains");
+
+    const second = await run([...EXEC, "codex"], env);
+    assert.equal(second.status, 0, second.stderr);
+    assert.deepEqual(readdirSync(tmp), [], "the second run left no per-turn folder");
+    assert.deepEqual(readdirSync(box.env.CODEX_HOME), ["config.toml"], "the replaced config left no temp file");
+  } finally {
+    box.cleanup();
+  }
+});
+
+// Protects the same guarantee on the interrupted path: a live turn has all three files, and SIGTERM must remove
+// all of them before the bridge exits. Without teardown, this test finds the folder still on disk.
+test("per-turn files are removed when a live run is stopped by SIGTERM", { timeout: 120_000 }, async () => {
+  const box = sandbox();
+  try {
+    const tmp = join(box.dir, "tmp");
+    mkdirSync(tmp, { mode: 0o700 });
+    const bridge = start([...EXEC, "codex"], {
+      ...box.env, TMPDIR: tmp, FAKE_CODEX_MODE: "hang", FAKE_CLAUDE_MODE: "hang",
+    });
+    const query = await waitFor(() => box.claudeEvents().find((event) => event.event === "query"), 60_000);
+    assert.ok(query, "the request reached the fake claude");
+    const privateRoot = perTurnRoot(box.claudeEvents());
+    assert.ok(privateRoot.startsWith(join(tmp, TEMP_PREFIX)), "the CLI used the private temp folder");
+    assert.deepEqual(readdirSync(privateRoot).sort(), ["settings.json", "system.md", "tools.json"]);
+    bridge.child.kill("SIGTERM");
+    const result = await bridge.done;
+    assert.equal(result.status, 128 + 15, result.stderr);
+    assert.equal(existsSync(privateRoot), false, "per-turn folder removed after SIGTERM");
+    assert.deepEqual(readdirSync(tmp), [], "no per-turn folder remains in TMPDIR");
+  } finally {
+    box.cleanup();
   }
 });
