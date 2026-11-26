@@ -12,7 +12,7 @@ Use your Claude Code login from the stock Codex CLI. Codex keeps its prompts, to
 ## Install
 
 ```sh
-npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.2.0/codex-on-claude-code-0.2.0.tgz
+npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.3.0/codex-on-claude-code-0.3.0.tgz
 ```
 
 There are no npm dependencies.
@@ -67,10 +67,11 @@ Does not work:
 
 ## Privacy
 
-- No telemetry. Besides the Claude Code turns Codex asks for, the only request the bridge makes on its own is an anonymous check of the public GitHub latest-release record, at most once a day and only in a terminal.
-- Stored: one small update file in your cache folder, plus a log of at most 256 KB if automatic updates are on.
-- Off with `CODEX_ON_CLAUDE_CODE_NO_UPDATE_CHECK=1` or `codex-on-claude-code update --checks off`.
-- Details: [PRIVACY.md](PRIVACY.md).
+- Network: Codex reaches the bridge on 127.0.0.1 only; each request runs one `claude` turn on your Claude Code login.
+- No telemetry. Codex and Claude Code are started with their telemetry switches off.
+- Updates: one anonymous check of the GitHub latest-release record a day, in a terminal only. Off with `CODEX_ON_CLAUDE_CODE_NO_UPDATE_CHECK=1` or `codex-on-claude-code update --checks off`.
+- Stored: `$CODEX_HOME/config.toml`, private per-turn temp files removed after each turn, and one small update file in your cache folder.
+- Details, lifetimes and removal: [PRIVACY.md](PRIVACY.md).
 
 ## Billing
 

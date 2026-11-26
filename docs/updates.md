@@ -7,7 +7,7 @@
 After a command you ran in a terminal, `codex-on-claude-code` writes two lines to stderr when a newer stable release exists:
 
 ```text
-codex-on-claude-code 0.3.0 available (you have 0.2.0) · run: codex-on-claude-code update
+codex-on-claude-code 0.4.0 available (you have 0.3.0) · run: codex-on-claude-code update
 turn on automatic updates: codex-on-claude-code update --auto on · skip: codex-on-claude-code update --skip
 ```
 

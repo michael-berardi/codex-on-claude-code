@@ -1,22 +1,38 @@
 # Privacy
 
-`codex-on-claude-code` has no telemetry, analytics or accounts of its own.
+`codex-on-claude-code` has no telemetry, analytics or accounts of its own. This describes this bridge only. Codex and Claude Code keep their own settings, credentials and transcripts; the bridge does not read, copy or clear those for you.
 
-## The bridge
+## Network and providers
 
-- The Responses server listens on 127.0.0.1 only. Each Codex request becomes one `claude` CLI turn on your Claude Code login, which Claude Code sends to Anthropic as it does for any turn.
-- The bridge writes `CODEX_HOME/config.toml` and, for each turn, a temp folder for the `claude` process that is removed when the turn ends. It does not log prompts or replies.
-- Claude Code keeps its own credentials. The bridge does not read, copy or log them.
+- **Codex side.** The bridge opens a random-port HTTP listener on `127.0.0.1` only. The generated Codex config points its `claude-code-bridge` provider's `base_url` at that address and names `CODEX_BRIDGE_TOKEN` as `env_key`; it never contains the token value. Each run generates 32 random bytes for that token, passes it to the wrapped command through the environment only, and excludes it from commands Codex runs. Requests without a matching bearer token get 401 before the body is read or a model starts. The comparison is constant time. Any process able to read the wrapped command's environment can use the server while the run lasts.
+- **Claude side.** Each accepted Codex request becomes one `claude -p` turn on your Claude Code login. Claude's own API client is pointed at a second, per-worker loopback relay; that relay forwards one model request to `https://api.anthropic.com` using Claude Code's credentials and blocks extra requests. The bridge does not handle your credentials, and refuses to start when an Anthropic API key or another backend is set (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`); it names the variables in the error, never their values. It does not log prompts or replies.
+- **Startup checks.** `claude auth status` checks login state and plan; a logged-in answer is reused in memory for 30 seconds and command readiness for 60 seconds. The model catalog probe sends the CLI a control request and a frame marked `shouldQuery: false` with the text `model-catalog-probe`; it asks the CLI which models it offers and sends no prompt to a model. It keeps `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` on, so the answer comes from the CLI's built-in catalog instead of a live fetch. A model id that catalog does not name is still passed to the CLI. The catalog is reused in memory for five minutes.
+- **Telemetry.** There are no analytics dependencies or telemetry SDKs. Codex, Claude Code and the startup probe are launched with `DO_NOT_TRACK=1`, `DISABLE_TELEMETRY=1`, `DISABLE_ERROR_REPORTING=1`; Claude Code also gets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`.
+- **Billing.** Turns run on your Claude Code login and count against its plan limits. A turn Claude reports as charged to usage credits fails with HTTP 402 and code `CLAUDE_CODE_BILLING` unless you set `CODEX_BRIDGE_ALLOW_USAGE_CREDITS=1`. You are responsible for the terms of the services you connect.
 
 ## The update check
 
 - One anonymous HTTPS `GET` of the public GitHub "latest release" record for the repository named in `package.json`. Headers: `Accept` and `User-Agent: codex-on-claude-code-update-check`. No id, installed version, usage, command line or machine data is sent. GitHub sees your IP address, as with any HTTPS request.
 - At most once every 24 hours, and only when you run a command in a terminal. Never with `CI` set, under Claude Code, for machine-readable output, or when turned off with `CODEX_ON_CLAUDE_CODE_NO_UPDATE_CHECK=1` or `codex-on-claude-code update --checks off`.
-- `update` and `update --check` request the same record when you run them. An install also downloads the release tarball and `SHA256SUMS` from the same GitHub release.
+- `update` and `update --check` request the same record when you run them. An install also downloads the release tarball and `SHA256SUMS` from the same GitHub release and installs the tarball only if its SHA-256 matches.
+- The first install with `npm i -g <release .tgz URL>` downloads the tarball from GitHub over HTTPS; npm does not compare it with `SHA256SUMS`, so check it yourself if you need to. There is no signature beyond that checksum.
+- How the notice, `update` and automatic installs work: [docs/updates.md](docs/updates.md).
 
-## Stored on your machine
+## Local writes
 
-- `update.json` in your cache folder (`$XDG_CACHE_HOME/codex-on-claude-code/`, or `~/Library/Caches/codex-on-claude-code/` on macOS, `~/.cache/codex-on-claude-code/` on Linux): last check time and result, latest version and its download URLs, your skip, check and auto choices, the last notice, and at most one rollback entry. Mode 0600, written atomically.
-- `update.log` next to it, only after automatic installs, capped at 256 KB.
-- Downloads go to a temp folder that is removed after the install, successful or not. The rollback entry is dropped after the new version has run once, or after seven days.
-- `codex-on-claude-code update --auto off` removes both files. Run it before `npm uninstall -g codex-on-claude-code` to leave nothing behind.
+| Write | Contents | Lifetime | Automatic cleanup or retention bound | Deletion |
+| --- | --- | --- | --- | --- |
+| `$CODEX_HOME/config.toml` | Managed Codex config: loopback URL, provider name, model id, optional reasoning effort, the name `CODEX_BRIDGE_TOKEN` (not its value), retry/timeout settings and exclusion of the token from tool commands. No credentials or prompts. Created directory `0700`, file `0600`. | Until you delete it or run the bridge again with the same `CODEX_HOME`. | Kept across runs by design. On a later run a bridge-marked file is replaced atomically; a file the bridge did not write is refused and left untouched. | Remove the private `CODEX_HOME` folder you supplied. |
+| `$CODEX_HOME/.config.toml.<random>.tmp` | The same config text, used only while replacing an existing managed config. File `0600`. | Milliseconds, while the new config is written and renamed. | Renamed to `config.toml` on success; unlinked if writing or renaming fails. | None normally remains; remove `CODEX_HOME` if a crash left one behind. |
+| `$TMPDIR/codex-bridge-claude-code-<random>/` (or the system temp dir when `TMPDIR` is unset), with `tools.json`, `settings.json` and `system.md` | Tool schemas/MCP manifest, extra request settings and the system prompt for one Claude worker. Directory `0700`, files `0600`. No token or Claude credentials. | One Claude worker: created just before launch and removed when its run, warm session or shutdown ends. Warm workers are retained at most five minutes, at most two per bridge process; concurrent requests get one-shot workers. | Removed on normal close, abort or error, shutdown signal, worker expiry and process exit; a creation failure removes the folder immediately. | Automatic. If the bridge process itself is killed with SIGKILL, no exit hook can run; remove any stale `codex-bridge-claude-code-*` folder from your temp directory manually. |
+| `update.json` in the cache folder: `$XDG_CACHE_HOME/codex-on-claude-code/`, otherwise `~/Library/Caches/codex-on-claude-code/` on macOS and `~/.cache/codex-on-claude-code/` on Linux | Last check time and result, latest version and its two download URLs, your skip, check and auto choices, the last notice, and at most one rollback entry (release URLs, not files). Folder `0700`, file `0600`, written atomically. | Until you remove it. | One small file, rewritten in place. The rollback entry is dropped once the new version has run successfully, or after seven days. | `codex-on-claude-code update --auto off`. |
+| `update.log` next to `update.json` | Results of automatic installs. File `0600`. | Only exists after an automatic install. | Capped at 256 KB. | `codex-on-claude-code update --auto off`. |
+| `$TMPDIR/codex-on-claude-code-update-<random>/` | The downloaded release tarball and `SHA256SUMS` during an update or rollback. | One install. | Removed when the install ends, successful or not. | Automatic. |
+| Other logs, history, cache, transcripts on disk | None written by this bridge. Child stderr is kept in memory only, capped at 64 KiB. | Auth status, ready-command and catalog results live in memory for at most 30 s, 60 s and 5 min; warm workers for at most 5 min. | All in-memory state dies with the process; there is no disk retention. | Nothing to remove here. Codex and Claude Code manage their own files separately. |
+
+## Removing what the bridge wrote
+
+1. Delete the `CODEX_HOME` folder you passed to the bridge: that removes `config.toml` and any leftover atomic-write temp file. The per-turn folders under the temp directory are removed by the bridge itself.
+2. Run `codex-on-claude-code update --auto off` to remove `update.json` and `update.log`, then `npm uninstall -g codex-on-claude-code`.
+
+No step touches Codex or Claude Code configuration, credentials or transcripts.

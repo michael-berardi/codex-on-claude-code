@@ -16,7 +16,7 @@ const baseUrl = /^base_url = "([^"]+)"$/m.exec(config)[1];
 const keyName = /^env_key = "([^"]+)"$/m.exec(config)[1];
 const model = /^model = "([^"]+)"$/m.exec(config)[1];
 const token = env[keyName];
-const out = { pid: process.pid, argv: process.argv, keyName, token, baseUrl, port: Number(new URL(baseUrl).port) };
+const out = { pid: process.pid, argv: process.argv, keyName, token, baseUrl, port: Number(new URL(baseUrl).port), telemetryEnv: Object.fromEntries(Object.entries(env).filter(([key]) => /^(?:DO_NOT_TRACK|DISABLE_TELEMETRY|DISABLE_ERROR_REPORTING)$/u.test(key))) };
 const save = () => writeFileSync(env.FAKE_CODEX_OUT, JSON.stringify(out));
 
 const tools = [
