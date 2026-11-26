@@ -12,10 +12,14 @@ Use your Claude Code login from the stock Codex CLI. Codex keeps its prompts, to
 ## Install
 
 ```sh
-npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.1/codex-on-claude-code-0.1.1.tgz
+npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.2.0/codex-on-claude-code-0.2.0.tgz
 ```
 
 There are no npm dependencies.
+
+## Updates
+
+In a terminal, the bridge says on stderr when a newer release exists, at most once a day, after your command ends. `codex-on-claude-code update` installs it after checking its SHA-256. `update --check`, `--skip`, `--rollback` and `--auto on|off|status` cover the rest; automatic installs stay off until you turn them on. Details: [docs/updates.md](docs/updates.md).
 
 ## Use
 
@@ -61,6 +65,13 @@ Does not work:
 - In a terminal, the wrapped command stays in the terminal's process group so it can read the keyboard; the bridge signals the command itself. Otherwise the command gets its own process group, and the bridge signals the whole group.
 - Claude Code keeps its own credentials. The bridge does not read, copy or log them.
 
+## Privacy
+
+- No telemetry. Besides the Claude Code turns Codex asks for, the only request the bridge makes on its own is an anonymous check of the public GitHub latest-release record, at most once a day and only in a terminal.
+- Stored: one small update file in your cache folder, plus a log of at most 256 KB if automatic updates are on.
+- Off with `CODEX_ON_CLAUDE_CODE_NO_UPDATE_CHECK=1` or `codex-on-claude-code update --checks off`.
+- Details: [PRIVACY.md](PRIVACY.md).
+
 ## Billing
 
 Each Codex request runs one `claude` turn on your Claude Code login and counts against your Claude plan limits.
@@ -78,6 +89,7 @@ You are responsible for following the terms of the services you connect.
 - `CODEX_BRIDGE_CLAUDE_CONFIG_DIR`: a Claude Code configuration folder. Passed to `claude` as `CLAUDE_CONFIG_DIR`.
 - `CODEX_BRIDGE_ALLOW_USAGE_CREDITS`: set to `1` to let turns charged to usage credits succeed. Off by default.
 - `CODEX_BRIDGE_TOKEN`: set by the bridge for the wrapped command only. Any value you set is replaced.
+- `CODEX_ON_CLAUDE_CODE_NO_UPDATE_CHECK`: set to `1` to turn off the automatic update check.
 
 ## Licence
 

@@ -28,8 +28,9 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { createClaudeCodeAdapter } from "../claude-code/adapter.js";
 import { resolveClaudeExecutable, processEnvironment } from "../claude-code/claude-cli.js";
 import { loadHarness } from "../claude-code/harness.js";
+import { VERSION, afterCommand, checkForUpdate, checksAllowed, prunePrevious, runUpdate } from "./update.mjs";
 
-export const VERSION = "0.1.1";
+export { VERSION };
 export const MARKER = "# codex-on-claude-code managed config";
 export const TOKEN_ENV = "CODEX_BRIDGE_TOKEN";
 const PROVIDER = "claude-code-bridge";
@@ -40,6 +41,7 @@ const KILL_GRACE_MS = 2_000;
 export const EXIT = Object.freeze({ USAGE: 64, NOT_FOUND: 127, CANNOT_RUN: 126, CONFIG: 78 });
 
 export const USAGE = `usage: codex-on-claude-code exec [--model <id>] [--effort <level>] -- <command> [args...]
+       codex-on-claude-code update [--check | --skip | --rollback | --auto on|off|status | --checks on|off|status]
 
 Runs <command> (normally codex) with CODEX_HOME/config.toml pointing Codex at a
 loopback endpoint that generates through your Claude Code login.
@@ -279,11 +281,24 @@ export function configToml({ url, model, effort }) {
   ].join("\n");
 }
 
-/** Parse `exec [options] -- command...`. Returns { help } / { version } / { model, effort, command, args }. */
+const bad = (why) => new BridgeError("CODEX_BRIDGE_USAGE", `${why}\n\n${USAGE}`, EXIT.USAGE);
+
+/** Parse `update [option]`: at most one option; --auto and --checks take on, off or status. */
+export function parseUpdateArgs(opts) {
+  const [flag, value, ...rest] = opts;
+  if (flag === undefined) return { update: true, action: "install" };
+  if (!["--check", "--skip", "--rollback", "--auto", "--checks"].includes(flag)) throw bad(`unknown update option: ${flag}`);
+  const takesValue = flag === "--auto" || flag === "--checks";
+  if (takesValue && !["on", "off", "status"].includes(value)) throw bad(`${flag} needs on, off or status`);
+  if (rest.length || (!takesValue && value !== undefined)) throw bad("update takes one option");
+  return { update: true, action: flag.slice(2), value };
+}
+
+/** Parse `exec [options] -- command...`. Returns { help } / { version } / { update, action, value } / exec fields. */
 export function parseArgs(argv) {
   if (argv[0] === "--help" || argv[0] === "-h") return { help: true };
   if (argv[0] === "--version") return { version: true };
-  const bad = (why) => new BridgeError("CODEX_BRIDGE_USAGE", `${why}\n\n${USAGE}`, EXIT.USAGE);
+  if (argv[0] === "update") return parseUpdateArgs(argv.slice(1));
   if (argv[0] !== "exec") throw bad(argv.length ? `unknown command or option: ${argv[0]}` : "missing command: exec");
   const sep = argv.indexOf("--");
   const opts = sep < 0 ? argv.slice(1) : argv.slice(1, sep);
@@ -402,20 +417,28 @@ async function preflight(parsed, env) {
 
 /**
  * Run the bridge. Resolves to the exit code; writes help, version and errors itself.
- * `io.stdout`/`io.stderr` are writable streams (tests may pass their own).
+ * `io.stdout`/`io.stderr` are writable streams; tests may pass their own, and `io.stdin`/`io.fetch` for updates.
  */
-export async function main(argv, { env = process.env, stdout = process.stdout, stderr = process.stderr } = {}) {
+export async function main(argv, {
+  env = process.env, stdout = process.stdout, stderr = process.stderr, stdin = process.stdin, fetch = globalThis.fetch,
+} = {}) {
   const say = (stream, text) => stream.write(text.endsWith("\n") ? text : `${text}\n`);
   let parsed, home;
   try {
     parsed = parseArgs(argv);
     if (parsed.help) { say(stdout, USAGE); return 0; }
     if (parsed.version) { say(stdout, VERSION); return 0; }
+    if (parsed.update) return await runUpdate(parsed, { env, stdout, stderr, stdin, fetch });
     home = await preflight(parsed, env);
   } catch (error) {
     if (error instanceof BridgeError) { say(stderr, `codex-on-claude-code: ${error.code}: ${error.message}`); return error.exitCode; }
     throw error;
   }
+
+  // The update check runs alongside the command (bounded to 4 s, never awaited before it starts); its notice, if any,
+  // comes after the command has finished.
+  const check = checksAllowed({ args: parsed.args, env, stdout, stderr, stdin })
+    ? checkForUpdate({ env, fetch }).catch(() => {}) : undefined;
 
   const log = (message) => say(stderr, message);
   const harness = await loadHarness();
@@ -454,6 +477,8 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
       child.once("exit", (code, signal) => done(code ?? (signal ? 128 + (osConstants.signals[signal] ?? 0) : 1)));
     });
     if (received) return 128 + osConstants.signals[received];
+    if (result === 0) try { prunePrevious({ env }); } catch {}
+    if (check) await afterCommand(check, { env, stderr });
     return result;
   } finally {
     // A request still in flight when the command exits is aborted, and its claude child stopped.
