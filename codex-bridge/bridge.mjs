@@ -27,9 +27,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { createClaudeCodeAdapter } from "../claude-code/adapter.js";
 import { resolveClaudeExecutable, processEnvironment } from "../claude-code/claude-cli.js";
+import { withTelemetryOff } from "../claude-code/env.js";
 import { loadHarness } from "../claude-code/harness.js";
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.1.2";
 export const MARKER = "# codex-on-claude-code managed config";
 export const TOKEN_ENV = "CODEX_BRIDGE_TOKEN";
 const PROVIDER = "claude-code-bridge";
@@ -448,7 +449,8 @@ export async function main(argv, { env = process.env, stdout = process.stdout, s
     }
     if (received) return 128 + osConstants.signals[received];
     // The token reaches the command only through its environment, under the name the config's env_key gives.
-    child = spawn(parsed.command, parsed.args, { stdio: "inherit", detached: ownGroup, env: { ...env, CODEX_HOME: home, [TOKEN_ENV]: token } });
+    // The wrapped command (normally Codex) is launched with telemetry off. Model/auth variables are untouched.
+    child = spawn(parsed.command, parsed.args, { stdio: "inherit", detached: ownGroup, env: withTelemetryOff({ ...env, CODEX_HOME: home, [TOKEN_ENV]: token }) });
     const result = await new Promise((done) => {
       child.once("error", (error) => { say(stderr, `codex-on-claude-code: CODEX_BRIDGE_COMMAND_FAILED: could not start "${parsed.command}": ${error.code ?? error.message}`); done(EXIT.CANNOT_RUN); });
       child.once("exit", (code, signal) => done(code ?? (signal ? 128 + (osConstants.signals[signal] ?? 0) : 1)));

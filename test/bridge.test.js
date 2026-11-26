@@ -66,6 +66,15 @@ test("the token is in no output, no config file and no argv", TIMEOUT, () => wit
   }
 }));
 
+// Protects the privacy defaults: the wrapped command is launched with telemetry off, even if the caller set otherwise.
+test("the wrapped command gets telemetry opt-outs", TIMEOUT, () => withSandbox({}, async (box) => {
+  const result = await run([...EXEC, "codex"], { ...box.env, FAKE_CODEX_MODE: "one", DO_NOT_TRACK: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(box.codexResult().telemetryEnv, {
+    DO_NOT_TRACK: "1", DISABLE_TELEMETRY: "1", DISABLE_ERROR_REPORTING: "1",
+  });
+}));
+
 // Protects the bearer check: a missing or wrong token gets 401 and no handler runs, so claude is never started.
 test("401 for a missing and a wrong token; claude never starts", TIMEOUT, () => withSandbox({}, async (box) => {
   const result = await run([...EXEC, "codex"], { ...box.env, FAKE_CODEX_MODE: "badauth" });

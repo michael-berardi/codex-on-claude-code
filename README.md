@@ -12,7 +12,7 @@ Use your Claude Code login from the stock Codex CLI. Codex keeps its prompts, to
 ## Install
 
 ```sh
-npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.1/codex-on-claude-code-0.1.1.tgz
+npm i -g https://github.com/michael-berardi/codex-on-claude-code/releases/download/v0.1.2/codex-on-claude-code-0.1.2.tgz
 ```
 
 There are no npm dependencies.
@@ -60,6 +60,14 @@ Does not work:
 - On SIGINT, SIGTERM or SIGHUP the bridge stops the wrapped command, aborts requests in flight, stops any running `claude` process, closes the server and exits. A request still in flight when the command exits is aborted too.
 - In a terminal, the wrapped command stays in the terminal's process group so it can read the keyboard; the bridge signals the command itself. Otherwise the command gets its own process group, and the bridge signals the whole group.
 - Claude Code keeps its own credentials. The bridge does not read, copy or log them.
+
+## Privacy
+
+During a run, the bridge listens only on `127.0.0.1` with a random bearer token. Codex sends prompts and tool results to that loopback address; the bridge runs one `claude` turn per request and forwards it to your configured Claude provider (normally Anthropic through your Claude Code login). At startup it also runs `claude auth status` and a model-catalog probe; the probe asks which models your login can use and sends no prompt. Installing downloads the release tarball from GitHub over HTTPS; this repository does not verify a checksum or signature for that download. Codex follows its own configuration; the bridge points its model provider at loopback.
+
+There is no telemetry or analytics code in this project and no npm dependencies. Codex and Claude are launched with `DO_NOT_TRACK=1`, `DISABLE_TELEMETRY=1` and `DISABLE_ERROR_REPORTING=1`. Claude Code also gets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, including for the startup model-catalog probe, so the probe lists the CLI's built-in models; a model id that list does not name is still passed to the CLI.
+
+The bridge writes `$CODEX_HOME/config.toml` (directory `0700`, file `0600`) with the loopback URL, model and the token's environment-variable name; it never writes the token, credentials or prompts there. Per-turn temporary files holding the system prompt and tool schemas are created `0700`/`0600` and removed when the run ends. The bridge keeps no logs, history or cache on disk; the Codex and Claude CLIs manage their own credentials and transcripts separately. To delete what this bridge wrote, remove the `CODEX_HOME` folder you supplied.
 
 ## Billing
 

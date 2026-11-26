@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { constants as fsConstants, rmSync } from "node:fs";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ import { ClaudeWaitLimitError, transportTimeout, waitForOperation } from "./wait
 import { TurnRelay } from "./turn-relay.js";
 import { usageCreditsAllowed, usageCreditsChargeError, } from "./billing.js";
 import { ClaudeCodeError, CODES } from "./errors.js";
-import { envFlagEnabled } from "./env.js";
+import { envFlagEnabled, withTelemetryOff } from "./env.js";
 
 import { harnessToolName } from "./tool-names.js";
 
@@ -58,8 +58,8 @@ export async function resolveClaudeExecutable(
 }
 
 function withConfigDirectory(env) {
-  const output = {};
-  for (const [key, value] of Object.entries(env)) if (value !== undefined) output[key] = value;
+  const output = withTelemetryOff(env);
+  for (const [key, value] of Object.entries(output)) if (value === undefined) delete output[key];
   if (output.CODEX_BRIDGE_CLAUDE_CONFIG_DIR) output.CLAUDE_CONFIG_DIR = output.CODEX_BRIDGE_CLAUDE_CONFIG_DIR;
   return output;
 }
@@ -500,23 +500,19 @@ export function processEnvironment(
     CLAUDE_CODE_TOTAL_TOKENS_REMINDER: "off",
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
+    DO_NOT_TRACK: "1",
   });
   if (typeof extraBody.max_tokens === "number") env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = String(extraBody.max_tokens);
   return env;
 }
 
 /**
- * The environment for model discovery only: the request environment without the two switches that make the CLI skip
- * its live model catalog. With CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC or DISABLE_TELEMETRY set, the CLI answers the
- * initialize request from a short built-in list (5 rows instead of the login's 14, measured on CLI 2.1.322), so newer
- * models the login can use were not offered. Discovery sends no prompt, so the catalog fetch costs nothing on the
- * plan; requests keep the full quiet environment.
+ * The environment for model discovery. It is the request environment: with the telemetry switches set, the CLI answers
+ * from its built-in catalog. Fetching the live catalog would require unsetting them, so discovery never does that.
+ * A model id the built-in list does not name still goes to the CLI unchanged.
  */
 export function discoveryEnvironment(input) {
-  const env = processEnvironment(input, {});
-  delete env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC;
-  delete env.DISABLE_TELEMETRY;
-  return env;
+  return processEnvironment(input, {});
 }
 
 async function writeFrame(child, frame, timeoutMs, signal) {
@@ -996,10 +992,13 @@ class ClaudeProcess {
     let relay;
 
     try {
+      // These files hold the system prompt and tool schemas. Keep the transport folder private even on systems
+      // where mkdtemp's default mode differs, and create every file 0600 from the start.
+      await chmod(root, 0o700);
       await Promise.all([
-        writeFile(toolsPath, JSON.stringify(input.manifest), "utf8"),
-        writeFile(settingsPath, JSON.stringify({ env: { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(input.extraBody) } }), "utf8"),
-        writeFile(systemPath, input.systemPrompt, "utf8"),
+        writeFile(toolsPath, JSON.stringify(input.manifest), { encoding: "utf8", mode: 0o600 }),
+        writeFile(settingsPath, JSON.stringify({ env: { CLAUDE_CODE_EXTRA_BODY: JSON.stringify(input.extraBody) } }), { encoding: "utf8", mode: 0o600 }),
+        writeFile(systemPath, input.systemPrompt, { encoding: "utf8", mode: 0o600 }),
       ]);
 
       relay = new TurnRelay(input.upstreamUrl ?? "https://api.anthropic.com", plan.timeoutMs);

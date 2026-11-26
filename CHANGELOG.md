@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Launch the wrapped command and all Claude Code subprocesses with telemetry off (`DO_NOT_TRACK`, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`), including the startup model-catalog probe, which now lists the CLI's built-in models instead of unsetting those switches to fetch a live catalog; a model id outside that list is still passed to the CLI.
+- Create the per-turn temporary files holding the system prompt and tool schemas with `0700`/`0600` permissions.
+- Add a privacy regression test for telemetry vendors/endpoints and loopback-only configuration, plus a `## Privacy` section in the README.
+
 ## 0.1.1
 
 - Return HTTP 400 for malformed request objects and array entries without starting a model turn.
