@@ -63,10 +63,11 @@ Does not work:
 
 ## Privacy
 
-- Codex uses a loopback-only port with a fresh random token; each request runs one `claude` turn on your login.
-- Startup checks `claude auth status` and the built-in model catalog; the probe sends no prompt.
-- Telemetry is off for both CLIs; the bridge writes no logs, history or cache.
-- The bridge writes only `$CODEX_HOME/config.toml` and private per-turn temp files; see [PRIVACY.md](PRIVACY.md) for lifetimes and deletion.
+- Each Codex request becomes one `claude` turn on your Claude Code login, so prompts and tool results go to Anthropic.
+- Codex reaches the bridge only on a loopback port with a fresh random token; startup checks send no prompt.
+- No telemetry: the bridge has none and runs both CLIs with telemetry and error reporting off.
+- It writes only `$CODEX_HOME/config.toml` and per-turn temp files it deletes itself; delete `CODEX_HOME` to remove the config.
+- No update check runs, so there is nothing to opt out of; details are in [PRIVACY.md](PRIVACY.md).
 
 ## Billing
 
